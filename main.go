@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/big"
 	"os"
 
@@ -22,7 +21,7 @@ func main() {
 	// load .env file
 	err := godotenv.Load()
 	if err != nil {
-		log.Fatal("Error loading .env file")
+		fmt.Println("Error loading .env file")
 	}
 	wsRPC := os.Getenv("WS_RPC")
 	limitOrderAddress := os.Getenv("LIMIT_ADDRESS")
@@ -35,25 +34,25 @@ func main() {
 	headers := make(chan *types.Header)
 	sub, err := client.SubscribeNewHead(context.Background(), headers)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	for {
 		select {
 		case err := <-sub.Err():
-			log.Fatal(err)
+			fmt.Println(err)
 		case header := <-headers:
 
 			block, err := client.BlockByHash(context.Background(), header.Hash())
 			if err != nil {
-				log.Fatal(err)
+				fmt.Println(err)
 			}
 
 			fmt.Println("Block Number:", block.Number().Uint64()) // 3477413
 
 			shouldBeExecuted, orderId, err := nineInchLimit.CheckUpkeep(nil, []byte("0x"))
 			if err != nil {
-				log.Fatal(err)
+				fmt.Println(err)
 			}
 			orderIdHex := hex.EncodeToString(orderId)
 			fmt.Println("OrderId:", orderId)
@@ -65,7 +64,7 @@ func main() {
 				fmt.Println("Perform upkeep")
 				txHash, err := performUpkeep(client, nineInchLimit, orderId, privateKey)
 				if err != nil {
-					log.Fatal(err)
+					fmt.Println(err)
 				}
 				fmt.Println("Tx Hash:", txHash)
 				fmt.Println("")
@@ -84,13 +83,13 @@ func performUpkeep(client *ethclient.Client, nineInchLimit *nineInchSpotLimitPLS
 
 	privateKey, err := crypto.HexToECDSA(pk)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	publicKey := privateKey.Public()
 	publicKeyECDSA, ok := publicKey.(*ecdsa.PublicKey)
 	if !ok {
-		log.Fatal("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
+		fmt.Println("cannot assert type: publicKey is not of type *ecdsa.PublicKey")
 	}
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
@@ -107,12 +106,12 @@ func performUpkeep(client *ethclient.Client, nineInchLimit *nineInchSpotLimitPLS
 func BuildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fromAddress common.Address, value *big.Int, gasPrice *big.Int, gasLimit uint64) *bind.TransactOpts {
 	chainId, err := client.NetworkID(context.Background())
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	transactor, err := bind.NewKeyedTransactorWithChainID(privateKey, chainId)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	transactor.Value = big.NewInt(0)
@@ -122,7 +121,7 @@ func BuildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fro
 
 	nonce, err := client.PendingNonceAt(context.Background(), fromAddress)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 
 	transactor.GasPrice = gasPrice
@@ -135,7 +134,7 @@ func BuildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fro
 func initEthClient(wsRPC string) *ethclient.Client {
 	client, err := ethclient.Dial(wsRPC)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 	return client
 }
@@ -143,7 +142,7 @@ func initEthClient(wsRPC string) *ethclient.Client {
 func initNineInchSpotLimit(address string, client *ethclient.Client) *nineInchSpotLimitPLS.NineInchSpotLimitPLS {
 	instance, err := nineInchSpotLimitPLS.NewNineInchSpotLimitPLS(common.HexToAddress(address), client)
 	if err != nil {
-		log.Fatal(err)
+		fmt.Println(err)
 	}
 	return instance
 }
