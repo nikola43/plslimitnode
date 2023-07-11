@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/fatih/color"
 	"github.com/joho/godotenv"
 	nineInchSpotLimitPLS "github.com/nikola43/plslimitnode/NineInchSpotLimitPLS"
 )
@@ -27,15 +28,31 @@ func main() {
 	limitOrderAddress := os.Getenv("LIMIT_ADDRESS")
 	privateKey := os.Getenv("PRIVATE_KEY")
 
-	/* init eth client and router contract */
-	client := initEthClient(wsRPC)
-	nineInchLimit := initNineInchSpotLimit(limitOrderAddress, client)
+	var client *ethclient.Client
+	do := client == nil
+	for do {
+		// init eth client
+		color.Cyan("Connecting to %s", wsRPC)
+		client, err = ethclient.Dial(wsRPC)
+		if err != nil {
+			fmt.Println(color.RedString("Error connecting to %s", wsRPC))
+		}
+		do = client == nil
+	}
+
+	nineInchLimit, err := nineInchSpotLimitPLS.NewNineInchSpotLimitPLS(common.HexToAddress(limitOrderAddress), client)
+	if err != nil {
+		fmt.Println(err)
+	}
 
 	headers := make(chan *types.Header)
 	sub, err := client.SubscribeNewHead(context.Background(), headers)
 	if err != nil {
 		fmt.Println(err)
 	}
+
+	color.Green("Connected to %s", wsRPC)
+	color.Yellow("Listening for new headers...")
 
 	for {
 		select {
@@ -48,25 +65,23 @@ func main() {
 				fmt.Println(err)
 			}
 
-			fmt.Println("Block Number:", block.Number().Uint64()) // 3477413
-
 			shouldBeExecuted, orderId, err := nineInchLimit.CheckUpkeep(nil, []byte("0x"))
 			if err != nil {
 				fmt.Println(err)
 			}
-			orderIdHex := hex.EncodeToString(orderId)
-			fmt.Println("OrderId:", orderId)
-			fmt.Println("OrderIdHex:", orderIdHex)
-			fmt.Println("Should be executed:", shouldBeExecuted)
+
+			fmt.Println(color.YellowString("Block Number"), color.CyanString("%d", block.Number().Uint64()))
+			fmt.Println(color.YellowString("OrderId"), color.CyanString(hex.EncodeToString(orderId)))
+			fmt.Println(color.YellowString("Should be executed"), color.CyanString(fmt.Sprintf("%t", shouldBeExecuted)))
 			fmt.Println("")
 
 			if shouldBeExecuted {
-				fmt.Println("Perform upkeep")
+				fmt.Println(color.YellowString("Performing upkeep..."))
 				txHash, err := performUpkeep(client, nineInchLimit, orderId, privateKey)
 				if err != nil {
 					fmt.Println(err)
 				}
-				fmt.Println("Tx Hash:", txHash)
+				fmt.Println(color.YellowString("Tx Hash"), color.CyanString(txHash))
 				fmt.Println("")
 			}
 		}
@@ -93,7 +108,7 @@ func performUpkeep(client *ethclient.Client, nineInchLimit *nineInchSpotLimitPLS
 	}
 
 	fromAddress := crypto.PubkeyToAddress(*publicKeyECDSA)
-	transactor := BuildTransactor(client, privateKey, fromAddress, big.NewInt(0), gasPrice, gasLimit)
+	transactor := buildTransactor(client, privateKey, fromAddress, big.NewInt(0), gasPrice, gasLimit)
 
 	tx, err := nineInchLimit.PerformUpkeep(transactor, performData)
 	if err != nil {
@@ -103,7 +118,7 @@ func performUpkeep(client *ethclient.Client, nineInchLimit *nineInchSpotLimitPLS
 	return tx.Hash().Hex(), nil
 }
 
-func BuildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fromAddress common.Address, value *big.Int, gasPrice *big.Int, gasLimit uint64) *bind.TransactOpts {
+func buildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fromAddress common.Address, value *big.Int, gasPrice *big.Int, gasLimit uint64) *bind.TransactOpts {
 	chainId, err := client.NetworkID(context.Background())
 	if err != nil {
 		fmt.Println(err)
@@ -129,20 +144,4 @@ func BuildTransactor(client *ethclient.Client, privateKey *ecdsa.PrivateKey, fro
 	transactor.Nonce = big.NewInt(int64(nonce))
 	transactor.Context = context.Background()
 	return transactor
-}
-
-func initEthClient(wsRPC string) *ethclient.Client {
-	client, err := ethclient.Dial(wsRPC)
-	if err != nil {
-		fmt.Println(err)
-	}
-	return client
-}
-
-func initNineInchSpotLimit(address string, client *ethclient.Client) *nineInchSpotLimitPLS.NineInchSpotLimitPLS {
-	instance, err := nineInchSpotLimitPLS.NewNineInchSpotLimitPLS(common.HexToAddress(address), client)
-	if err != nil {
-		fmt.Println(err)
-	}
-	return instance
 }
