@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+	"time"
 
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
@@ -84,6 +85,7 @@ func main() {
 					}
 					fmt.Println(color.YellowString("Tx Hash"), color.CyanString(txHash))
 					fmt.Println("")
+					time.Sleep(10 * time.Second)
 
 				}
 			}
