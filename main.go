@@ -85,7 +85,7 @@ func main() {
 					}
 					fmt.Println(color.YellowString("Tx Hash"), color.CyanString(txHash))
 					fmt.Println("")
-					time.Sleep(10 * time.Second)
+					time.Sleep(20 * time.Second)
 
 				}
 			}
