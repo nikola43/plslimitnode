@@ -9,6 +9,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
@@ -93,6 +94,25 @@ func main() {
 	}
 }
 
+func WaitForTransaction(client *ethclient.Client, txHash common.Hash) {
+	for {
+		receipt, err := client.TransactionReceipt(context.Background(), txHash)
+		if err != nil {
+			if err == ethereum.NotFound {
+				// Transaction not yet mined, wait and retry
+				time.Sleep(3 * time.Second)
+				continue
+			} else {
+				fmt.Println("Failed to get transaction receipt: %v", err)
+			}
+		}
+		if receipt != nil {
+			fmt.Printf("Transaction mined in block %d with status %d\n", receipt.BlockNumber.Uint64(), receipt.Status)
+			return
+		}
+	}
+}
+
 func getClient(wsRPC string) *ethclient.Client {
 	var client *ethclient.Client
 	var err error
@@ -134,6 +154,8 @@ func performUpkeep(client *ethclient.Client, nineInchLimit *nineInchSpotLimitPLS
 	if err != nil {
 		panic(err)
 	}
+
+	WaitForTransaction(client, tx.Hash())
 
 	return tx.Hash().Hex(), nil
 }
