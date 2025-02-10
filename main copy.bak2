@@ -1,3 +1,4 @@
+
 package main
 
 import (
@@ -55,36 +56,24 @@ func main() {
 
 	for {
 		fmt.Println(color.YellowString("Nonce"), color.CyanString(fmt.Sprintf("%d", nonce)))
-		// shouldExecute, order := getContractOrder(client, LIMIT_ADDRESS)
-		// if !shouldExecute {
-		// 	fmt.Println(color.YellowString("No orders to process"))
-		// 	time.Sleep(1 * time.Second)
-		// 	continue
-		// }
-
-		orders := getContractOrders(client, LIMIT_ADDRESS)
-		if len(orders) == 0 {
+		shouldExecute, order := getContractOrder(client, LIMIT_ADDRESS)
+		if !shouldExecute {
 			fmt.Println(color.YellowString("No orders to process"))
 			time.Sleep(1 * time.Second)
 			continue
 		}
 
-		for _, order := range orders {
+		fmt.Println(color.YellowString("Order to process"), color.CyanString(fmt.Sprintf("%d", len(order))))
 
-			fmt.Println(color.YellowString("Order to process"), color.CyanString(fmt.Sprintf("%d", len(order))))
-
-			tx, err := performUpkeepRaw(client, order, walletAddress, privateKey, common.HexToAddress(LIMIT_ADDRESS), nonce)
-			if err != nil {
-				fmt.Println(color.RedString("Error processing order"))
-				time.Sleep(1 * time.Second)
-				continue
-			}
-
-			fmt.Println(color.YellowString("Transaction Hash"), color.CyanString(tx.Hash().Hex()))
-			WaitMined(client, tx.Hash())
-			nonce++
+		tx, err := performUpkeepRaw(client, order, walletAddress, privateKey, common.HexToAddress(LIMIT_ADDRESS), nonce)
+		if err != nil {
+			fmt.Println(color.RedString("Error processing order"))
 			time.Sleep(1 * time.Second)
+			continue
 		}
+
+		fmt.Println(color.YellowString("Transaction Hash"), color.CyanString(tx.Hash().Hex()))
+		WaitMined(client, tx.Hash())
 	}
 }
 
@@ -125,82 +114,15 @@ func NewAbiFromFile(path string) (*abi.ABI, error) {
 	return &parsedABI, nil
 }
 
-func getContractOrders(client *ethclient.Client, contractAddress string) [][]byte {
-	contractABI, err := NewAbiFromFile("abi.json")
-	if err != nil {
-		panic(err)
-	}
-
-	totalOrdersCallData, err := contractABI.Pack("totalOrders")
-	if err != nil {
-		panic(err)
-	}
-
-	contractAddresss := common.HexToAddress(contractAddress)
-	msg := ethereum.CallMsg{
-		To:   &contractAddresss,
-		Data: totalOrdersCallData,
-	}
-
-	result, err := client.CallContract(context.Background(), msg, nil)
-	if err != nil {
-		panic(err)
-	}
-
-	// Unpack the result
-	out, err := contractABI.Unpack("totalOrders", result)
-	if err != nil {
-		panic(err)
-	}
-
-	totalOrders := out[0].(*big.Int)
-	fmt.Println(color.YellowString("Total Orders"), color.CyanString(fmt.Sprintf("%d", totalOrders)))
-
-	orders := make([][]byte, 0)
-
-	for i := uint64(0); i < totalOrders.Uint64(); i++ {
-		orderCallData, err := contractABI.Pack("getOrderAt", big.NewInt(int64(i)))
-		if err != nil {
-			panic(err)
-		}
-
-		msg := ethereum.CallMsg{
-			To:   &contractAddresss,
-			Data: orderCallData,
-		}
-
-		result, err := client.CallContract(context.Background(), msg, nil)
-		if err != nil {
-			panic(err)
-		}
-
-		// Unpack the result
-		out, err := contractABI.Unpack("getOrderAt", result)
-		if err != nil {
-			panic(err)
-		}
-
-		orderIdBytes := out[0].([32]uint8) // Correct type assertion
-        orderId := hex.EncodeToString(orderIdBytes[:]) // Convert to []uint8
-        fmt.Println(color.YellowString("OrderId"), color.CyanString(orderId))
-
-        if orderId != "" {
-            orders = append(orders, orderIdBytes[:]) // Convert to []uint8
-        }
-	}
-
-	return orders
-}
-
 func getContractOrder(client *ethclient.Client, contractAddress string) (bool, []byte) {
 	contractABI, err := NewAbiFromFile("abi.json")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	callData, err := contractABI.Pack("checkUpkeep", []byte("0x00"))
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	contractAddresss := common.HexToAddress(contractAddress)
@@ -211,7 +133,7 @@ func getContractOrder(client *ethclient.Client, contractAddress string) (bool, [
 
 	result, err := client.CallContract(context.Background(), msg, nil)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	// Unpack the result
@@ -219,7 +141,7 @@ func getContractOrder(client *ethclient.Client, contractAddress string) (bool, [
 	// orderResult := make([]*OrderResult, 0)
 	out, err := contractABI.Unpack("checkUpkeep", result)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	fmt.Println(out[0])
@@ -331,7 +253,7 @@ func performUpkeepRaw(client *ethclient.Client, order []byte, fromAddress common
 
 	contractABI, err := NewAbiFromFile("abi.json")
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 
 	data, err := contractABI.Pack("performUpkeep", order)
